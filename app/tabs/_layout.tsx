@@ -27,6 +27,16 @@ export default function TabsLayout() {
           title: "Home",
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: "Search",
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
             <Ionicons name="search" size={size} color={color} />
           ),
         }}
@@ -37,6 +47,15 @@ export default function TabsLayout() {
           title: "My Reviews",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="star" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="recipes"
+        options={{
+          title: "Recipe AI",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="restaurant" size={size} color={color} />
           ),
         }}
       />

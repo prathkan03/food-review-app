@@ -2,68 +2,49 @@ import { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TextInput,
   FlatList,
   Pressable,
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
+  RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../src/components/services/supabase";
-import * as Location from "expo-location";
 import { router } from "expo-router";
 
-interface Restaurant {
-  provider: string;
-  providerId: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  rating?: number;
-  priceLevel?: number;
+interface Review {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  restaurantId: string;
+  restaurantName: string;
+  restaurantAddress: string;
+  rating: number;
+  text: string;
+  photoUrls?: string[];
+  items?: string[];
+  createdAt: string;
 }
 
 export default function HomeTab() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Restaurant[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLocationError("Permission to access location was denied");
-        // Default to Columbus, OH coordinates
-        setLocation({ lat: 39.9612, lng: -82.9988 });
-        return;
-      }
-
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation({
-        lat: currentLocation.coords.latitude,
-        lng: currentLocation.coords.longitude,
-      });
-    })();
+    fetchFriendsReviews();
   }, []);
 
-  const search = async () => {
-    if (!query.trim() || !location) return;
-
-    setLoading(true);
+  const fetchFriendsReviews = async () => {
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
 
       const res = await fetch(
-        `http://localhost:8080/restaurants/search?query=${encodeURIComponent(
-          query
-        )}&lat=${location.lat}&lng=${location.lng}`,
+        `http://localhost:8080/reviews/feed`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -72,125 +53,153 @@ export default function HomeTab() {
       );
 
       if (res.ok) {
-        const data = await res.json();
-        setResults(data);
+        const feedData = await res.json();
+        setReviews(feedData);
       }
     } catch (error) {
-      console.error("Search error:", error);
+      console.error("Error fetching feed:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleSelectRestaurant = (restaurant: Restaurant) => {
-    // Navigate to create review screen with restaurant data
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchFriendsReviews();
+  };
+
+  const handleReviewPress = (review: Review) => {
     router.push({
-      pathname: "/reviews/create",
-      params: {
-        provider: restaurant.provider,
-        providerId: restaurant.providerId,
-        name: restaurant.name,
-        address: restaurant.address,
-        lat: restaurant.lat,
-        lng: restaurant.lng,
-      },
+      pathname: "/reviews/[id]",
+      params: { id: review.id },
     });
   };
 
-  const renderRating = (rating?: number) => {
-    if (!rating) return null;
+  const renderRating = (rating: number) => {
     return (
       <View style={styles.ratingContainer}>
-        <Ionicons name="star" size={14} color="#FFB800" />
-        <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+        {[...Array(5)].map((_, i) => (
+          <Ionicons
+            key={i}
+            name={i < rating ? "star" : "star-outline"}
+            size={16}
+            color="#FFB800"
+          />
+        ))}
       </View>
     );
   };
 
-  const renderPriceLevel = (level?: number) => {
-    if (!level) return null;
-    return <Text style={styles.priceLevel}>{"$".repeat(level)}</Text>;
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Find Restaurants</Text>
-          <Text style={styles.subtitle}>Search and review your favorite places</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Feed</Text>
+        <Text style={styles.subtitle}>Recent reviews from friends</Text>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading feed...</Text>
         </View>
-
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search for restaurants..."
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={search}
-              returnKeyType="search"
-              style={styles.searchInput}
-              placeholderTextColor="#999"
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery("")} style={styles.clearButton}>
-                <Ionicons name="close-circle" size={20} color="#999" />
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {locationError && (
-          <View style={styles.locationError}>
-            <Ionicons name="location-outline" size={16} color="#FF6B6B" />
-            <Text style={styles.locationErrorText}>{locationError}</Text>
-          </View>
-        )}
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Searching restaurants...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={results}
-            keyExtractor={(item) => item.providerId}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              query.length > 0 && !loading ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="restaurant-outline" size={48} color="#CCC" />
-                  <Text style={styles.emptyText}>No restaurants found</Text>
-                  <Text style={styles.emptySubtext}>Try a different search term</Text>
-                </View>
-              ) : null
-            }
-            renderItem={({ item }) => (
-              <Pressable
-                style={styles.restaurantCard}
-                onPress={() => handleSelectRestaurant(item)}
-              >
-                <View style={styles.restaurantInfo}>
-                  <Text style={styles.restaurantName}>{item.name}</Text>
-                  <Text style={styles.restaurantAddress} numberOfLines={2}>
-                    {item.address}
-                  </Text>
-                  <View style={styles.restaurantMeta}>
-                    {renderRating(item.rating)}
-                    {renderPriceLevel(item.priceLevel)}
+      ) : (
+        <FlatList
+          data={reviews}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={48} color="#CCC" />
+              <Text style={styles.emptyText}>No reviews yet</Text>
+              <Text style={styles.emptySubtext}>Follow friends to see their reviews</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              style={styles.reviewCard}
+              onPress={() => handleReviewPress(item)}
+            >
+              <View style={styles.reviewHeader}>
+                <View style={styles.userInfo}>
+                  {item.userAvatar ? (
+                    <Image source={{ uri: item.userAvatar }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Ionicons name="person" size={20} color="#999" />
+                    </View>
+                  )}
+                  <View style={styles.userDetails}>
+                    <Text style={styles.userName}>{item.userName}</Text>
+                    <Text style={styles.reviewDate}>{formatDate(item.createdAt)}</Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#CCC" />
-              </Pressable>
-            )}
-          />
-        )}
-      </KeyboardAvoidingView>
+              </View>
+
+              <View style={styles.restaurantInfo}>
+                <Text style={styles.restaurantName}>{item.restaurantName}</Text>
+                <Text style={styles.restaurantAddress} numberOfLines={1}>
+                  {item.restaurantAddress}
+                </Text>
+              </View>
+
+              {renderRating(item.rating)}
+
+              {item.text && (
+                <Text style={styles.reviewText} numberOfLines={3}>
+                  {item.text}
+                </Text>
+              )}
+
+              {item.items && item.items.length > 0 && (
+                <View style={styles.itemsContainer}>
+                  <Text style={styles.itemsLabel}>Reviewed items:</Text>
+                  <View style={styles.itemsList}>
+                    {item.items.slice(0, 3).map((foodItem, index) => (
+                      <View key={index} style={styles.itemChip}>
+                        <Text style={styles.itemText}>{foodItem}</Text>
+                      </View>
+                    ))}
+                    {item.items.length > 3 && (
+                      <Text style={styles.moreItems}>+{item.items.length - 3} more</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {item.photoUrls && item.photoUrls.length > 0 && (
+                <View style={styles.photoContainer}>
+                  <Image
+                    source={{ uri: item.photoUrls[0] }}
+                    style={styles.reviewPhoto}
+                  />
+                  {item.photoUrls.length > 1 && (
+                    <View style={styles.morePhotos}>
+                      <Text style={styles.morePhotosText}>+{item.photoUrls.length - 1}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </Pressable>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -204,6 +213,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 10,
+    backgroundColor: "#FFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E7",
   },
   title: {
     fontSize: 28,
@@ -214,46 +226,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: "#666",
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1A1A1A",
-  },
-  clearButton: {
-    padding: 4,
-  },
-  locationError: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: "#FFF5F5",
-  },
-  locationErrorText: {
-    fontSize: 12,
-    color: "#FF6B6B",
-    marginLeft: 6,
   },
   loadingContainer: {
     flex: 1,
@@ -266,28 +238,60 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingVertical: 12,
   },
-  restaurantCard: {
-    flexDirection: "row",
-    alignItems: "center",
+  reviewCard: {
     backgroundColor: "#FFF",
+    marginHorizontal: 16,
+    marginVertical: 8,
     borderRadius: 12,
     padding: 16,
-    marginVertical: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  restaurantInfo: {
-    flex: 1,
+  reviewHeader: {
+    marginBottom: 12,
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 12,
   },
-  restaurantName: {
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
     fontSize: 16,
+    fontWeight: "600",
+    color: "#1A1A1A",
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 2,
+  },
+  restaurantInfo: {
+    marginBottom: 8,
+  },
+  restaurantName: {
+    fontSize: 18,
     fontWeight: "600",
     color: "#1A1A1A",
     marginBottom: 4,
@@ -295,27 +299,69 @@ const styles = StyleSheet.create({
   restaurantAddress: {
     fontSize: 14,
     color: "#666",
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  restaurantMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
   },
   ratingContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 2,
+    marginBottom: 12,
   },
-  ratingText: {
-    fontSize: 13,
+  reviewText: {
+    fontSize: 14,
+    color: "#333",
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  itemsContainer: {
+    marginBottom: 12,
+  },
+  itemsLabel: {
+    fontSize: 12,
     color: "#666",
+    marginBottom: 8,
     fontWeight: "500",
   },
-  priceLevel: {
+  itemsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  itemChip: {
+    backgroundColor: "#F0F0F0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  itemText: {
     fontSize: 13,
-    color: "#4CAF50",
+    color: "#333",
+  },
+  moreItems: {
+    fontSize: 13,
+    color: "#007AFF",
+    alignSelf: "center",
+  },
+  photoContainer: {
+    position: "relative",
+  },
+  reviewPhoto: {
+    width: "100%",
+    height: 200,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  morePhotos: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  morePhotosText: {
+    color: "#FFF",
+    fontSize: 12,
     fontWeight: "600",
   },
   emptyContainer: {
