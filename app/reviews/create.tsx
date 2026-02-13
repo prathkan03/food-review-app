@@ -96,6 +96,20 @@ export default function CreateReview() {
         return;
       }
 
+      // Debug: Print JWT header to see algorithm and key ID
+      const token = session?.access_token;
+      if (!token) {
+        Alert.alert("Error", "No access token found");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      const b64 = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/");
+      const headerJson = JSON.parse(atob(b64));
+      console.log("JWT header:", headerJson);
+      console.log("JWT algorithm:", headerJson.alg);
+      console.log("JWT key ID:", headerJson.kid);
+
       // Calculate overall rating (average of all dishes)
       const overallRating = Math.round(
         dishes.reduce((sum, dish) => sum + dish.rating, 0) / dishes.length
