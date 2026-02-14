@@ -51,7 +51,7 @@ public class ReviewService {
         review.setRestaurant(restaurant);
         review.setRating(request.rating());
         review.setText(request.text());
-        review.setDishes(request.dishes());
+        review.setDishes(request.dishes() != null ? request.dishes().toArray(new String[0]) : new String[0]);
         review.setCreatedAt(OffsetDateTime.now());
         review.setUpdatedAt(OffsetDateTime.now());
 
@@ -69,7 +69,7 @@ public class ReviewService {
             throw new RuntimeException("User is not the owner of the review");
         }
         
-        review.setDishes(updateDetails.dishes());
+        review.setDishes(updateDetails.dishes() != null ? updateDetails.dishes().toArray(new String[0]) : new String[0]);
         review.setRating(updateDetails.rating());
         review.setText(updateDetails.content());
         review.setUpdatedAt(OffsetDateTime.now());

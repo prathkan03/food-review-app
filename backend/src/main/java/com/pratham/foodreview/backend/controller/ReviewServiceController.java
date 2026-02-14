@@ -1,5 +1,6 @@
 package com.pratham.foodreview.backend.controller;
 
+import com.pratham.foodreview.backend.dto.CreateReviewRequest;
 import com.pratham.foodreview.backend.dto.ReviewResponse;
 import com.pratham.foodreview.backend.dto.ReviewUpdate;
 import com.pratham.foodreview.backend.service.ReviewService;
@@ -17,6 +18,14 @@ public class ReviewServiceController {
 
     public ReviewServiceController(ReviewService reviewService) {
         this.reviewService = reviewService;
+    }
+
+    @PostMapping
+    public ReviewResponse createReview(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody CreateReviewRequest request) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return reviewService.createReview(userId, request);
     }
 
     @PutMapping("/{reviewId}")

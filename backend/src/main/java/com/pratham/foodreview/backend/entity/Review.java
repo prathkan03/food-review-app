@@ -1,8 +1,10 @@
 package com.pratham.foodreview.backend.entity;
 
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.Type;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -41,9 +43,9 @@ public class Review {
   @Column(name = "updated_at")
   private OffsetDateTime updatedAt;
 
-  @Type(JsonType.class)
+  @JdbcTypeCode(SqlTypes.ARRAY)
   @Column(name = "dishes", columnDefinition = "text[]")
-  private List<String> dishes;
+  private String[] dishes;
 
   // getters/setters
   public UUID getId() { return id; }
@@ -70,6 +72,6 @@ public class Review {
   public OffsetDateTime getUpdatedAt() { return updatedAt; }
   public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-  public List<String> getDishes() {return dishes;}
-  public void setDishes(List<String> dishes) {this.dishes = dishes;}
+  public String[] getDishes() {return dishes;}
+  public void setDishes(String[] dishes) {this.dishes = dishes;}
 }
