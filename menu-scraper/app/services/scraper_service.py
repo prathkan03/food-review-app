@@ -22,7 +22,7 @@ async def scrape_menu_page(website_url: str) -> str | None:
                 "/dining", "/eat", "/drinks", "/beverages", "/bar",
                 "/cuisine", "/order", "/drink-menu", "/bar-menu",
                 "/lunch", "/dinner", "/breakfast", "/brunch",
-                "/specials", "/daily-specials",
+                "/specials", "/daily-specials", "/menus",
             ]
             is_menu_url = any(kw in url_lower for kw in menu_path_keywords)
 
