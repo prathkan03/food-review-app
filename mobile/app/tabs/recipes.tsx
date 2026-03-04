@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -44,82 +45,32 @@ interface ChatSession {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Static data                                                        */
+/*  Storage helpers                                                    */
 /* ------------------------------------------------------------------ */
 
-const SAMPLE_SESSIONS: ChatSession[] = [
-  {
-    id: "1",
-    title: "Spicy Butter Chicken",
-    icon: "flame-outline",
-    messages: [
-      {
-        id: "m1",
-        role: "assistant",
-        content:
-          "Based on your glowing review of The Spice Hub, I've reverse-engineered their signature Spicy Butter Chicken recipe for you. It features that same creamy texture and smoky spice profile you loved!",
-        timestamp: new Date(),
-      },
-      {
-        id: "m2",
-        role: "assistant",
-        content: "",
-        recipe: {
-          title: "The Spice Hub Style Butter Chicken",
-          imageUrl:
-            "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
-          ingredients: [
-            "500g Boneless Chicken Thighs",
-            "2 tbsp Kashmiri Chili Powder",
-            "100ml Heavy Cream",
-            "50g Cold Butter (Cubed)",
-            "1 tbsp Kasuri Methi (Dried Fenugreek)",
-            "Ginger Garlic Paste (2 tbsp)",
-          ],
-          steps: [
-            "Marinate the chicken with ginger-garlic paste, salt, and chili powder for at least 30 minutes. Sear in a hot pan until charred but tender.",
-            "Prepare the gravy using pureed tomatoes, cashews, and spices. Simmer until the oil begins to separate.",
-            "Add the chicken and fold in the cold butter and heavy cream. Finish with crushed Kasuri Methi for that authentic aroma.",
-          ],
-        },
-        timestamp: new Date(),
-      },
-      {
-        id: "m3",
-        role: "assistant",
-        content:
-          "Ready to cook? Or would you like to know how to make this vegan-friendly?",
-        timestamp: new Date(),
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "Classic Carbonara",
-    icon: "restaurant-outline",
-    messages: [
-      {
-        id: "m4",
-        role: "assistant",
-        content: "Here's an authentic Roman-style Carbonara recipe for you!",
-        timestamp: new Date(),
-      },
-    ],
-  },
-  {
-    id: "3",
-    title: "Miso Glazed Salmon",
-    icon: "fish-outline",
-    messages: [
-      {
-        id: "m5",
-        role: "assistant",
-        content: "Let me share a delicious Miso Glazed Salmon recipe!",
-        timestamp: new Date(),
-      },
-    ],
-  },
-];
+const STORAGE_KEY = "recipe_sessions_v1";
+
+const serializeSessions = (sessions: ChatSession[]): string =>
+  JSON.stringify(
+    sessions.map((s) => ({
+      ...s,
+      messages: s.messages.map((m) => ({
+        ...m,
+        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+      })),
+    }))
+  );
+
+const deserializeSessions = (json: string): ChatSession[] => {
+  const data = JSON.parse(json);
+  return data.map((s: any) => ({
+    ...s,
+    messages: s.messages.map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    })),
+  }));
+};
 
 const QUICK_ACTIONS = [
   { label: "Vegan swap?", prompt: "How can I make this recipe vegan-friendly?" },
@@ -155,12 +106,33 @@ export default function RecipesTab() {
   const params = useLocalSearchParams();
   const isWide = width >= 700;
   const [sidebarOpen, setSidebarOpen] = useState(isWide);
-  const [sessions, setSessions] = useState<ChatSession[]>(SAMPLE_SESSIONS);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const [hasAutoFetched, setHasAutoFetched] = useState(false);
+
+  // Load persisted sessions on mount
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((json) => {
+      if (json) {
+        try {
+          setSessions(deserializeSessions(json));
+        } catch {
+          setSessions([]);
+        }
+      }
+      setSessionsLoaded(true);
+    });
+  }, []);
+
+  // Persist sessions whenever they change (after initial load)
+  useEffect(() => {
+    if (!sessionsLoaded) return;
+    AsyncStorage.setItem(STORAGE_KEY, serializeSessions(sessions));
+  }, [sessions, sessionsLoaded]);
 
   useEffect(() => {
     setSidebarOpen(isWide);
