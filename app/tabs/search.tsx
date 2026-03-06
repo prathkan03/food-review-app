@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../src/components/services/supabase";
 import * as Location from "expo-location";
 import { router } from "expo-router";
+import UserProfileModal from "../../src/components/UserProfileModal";
 
 interface SearchResult {
   provider: string;
@@ -48,9 +49,20 @@ const TRENDING_CUISINES = [
   { id: "5", name: "Salad", emoji: "🥗" },
 ];
 
+interface UserResult {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+}
+
 export default function SearchTab() {
   const [query, setQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<"restaurants" | "people">("restaurants");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [userResults, setUserResults] = useState<UserResult[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [trending, setTrending] = useState<TrendingRestaurant[]>([]);
   const [loading, setLoading] = useState(false);
   const [trendingLoading, setTrendingLoading] = useState(true);
@@ -101,6 +113,25 @@ export default function SearchTab() {
 
   const search = async () => {
     if (!query.trim()) return;
+
+    if (searchMode === "people") {
+      setLoading(true);
+      setUserResults([]);
+      try {
+        const res = await fetch(
+          `http://localhost:8080/users/search?q=${encodeURIComponent(query.trim())}`
+        );
+        if (res.ok) {
+          setUserResults(await res.json());
+        }
+      } catch (error) {
+        console.error("People search error:", error);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!location) {
       alert("Location not available yet, please wait");
       return;
@@ -119,7 +150,6 @@ export default function SearchTab() {
       if (res.ok) {
         const data = await res.json();
         setResults(data);
-        // Add to recent searches
         if (!recentSearches.includes(query.trim())) {
           setRecentSearches((prev) => [query.trim(), ...prev].slice(0, 5));
         }
@@ -179,7 +209,7 @@ export default function SearchTab() {
     return categories.slice(0, 3).join(" • ");
   };
 
-  const isSearchActive = loading || results.length > 0;
+  const isSearchActive = loading || results.length > 0 || userResults.length > 0;
 
   const renderTrendingCard = (restaurant: TrendingRestaurant) => (
     <Pressable
@@ -264,7 +294,7 @@ export default function SearchTab() {
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={20} color="#999" />
             <TextInput
-              placeholder="Cuisine, dish, or restaurant..."
+              placeholder={searchMode === "people" ? "Search people..." : "Cuisine, dish, or restaurant..."}
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={search}
@@ -278,6 +308,28 @@ export default function SearchTab() {
           </Pressable>
         </View>
 
+        {/* Mode Toggle */}
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[styles.modeButton, searchMode === "restaurants" && styles.modeButtonActive]}
+            onPress={() => { setSearchMode("restaurants"); setResults([]); setUserResults([]); setQuery(""); }}
+          >
+            <Ionicons name="restaurant-outline" size={15} color={searchMode === "restaurants" ? "#FFF" : "#666"} />
+            <Text style={[styles.modeButtonText, searchMode === "restaurants" && styles.modeButtonTextActive]}>
+              Restaurants
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeButton, searchMode === "people" && styles.modeButtonActive]}
+            onPress={() => { setSearchMode("people"); setResults([]); setUserResults([]); setQuery(""); }}
+          >
+            <Ionicons name="people-outline" size={15} color={searchMode === "people" ? "#FFF" : "#666"} />
+            <Text style={[styles.modeButtonText, searchMode === "people" && styles.modeButtonTextActive]}>
+              People
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Loading */}
         {loading && (
           <View style={styles.loadingContainer}>
@@ -286,7 +338,7 @@ export default function SearchTab() {
           </View>
         )}
 
-        {/* Search Results */}
+        {/* Restaurant Search Results */}
         {!loading && results.length > 0 && (
           <View style={styles.resultsContainer}>
             <View style={styles.sectionHeader}>
@@ -331,8 +383,55 @@ export default function SearchTab() {
           </View>
         )}
 
-        {/* Default view (no search active) */}
-        {!isSearchActive && (
+        {/* People Search Results */}
+        {!loading && userResults.length > 0 && (
+          <View style={styles.resultsContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleLarge}>People</Text>
+              <Pressable onPress={() => { setUserResults([]); setQuery(""); }}>
+                <Text style={styles.clearAllText}>Clear</Text>
+              </Pressable>
+            </View>
+            {userResults.map((user) => (
+              <Pressable
+                key={user.id}
+                style={styles.searchResultCard}
+                onPress={() => setSelectedUserId(user.id)}
+              >
+                <View style={styles.userAvatarSmall}>
+                  {user.avatarUrl ? (
+                    <Image source={{ uri: user.avatarUrl }} style={styles.userAvatarImage} />
+                  ) : (
+                    <Ionicons name="person" size={22} color="#FF6B35" />
+                  )}
+                </View>
+                <View style={styles.searchResultInfo}>
+                  <Text style={styles.searchResultName}>
+                    {user.displayName || user.username || "User"}
+                  </Text>
+                  {user.username ? (
+                    <Text style={styles.searchResultAddress}>@{user.username}</Text>
+                  ) : null}
+                  {user.bio ? (
+                    <Text style={styles.userBioPreview} numberOfLines={1}>{user.bio}</Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* No people results */}
+        {!loading && searchMode === "people" && userResults.length === 0 && query.trim().length > 0 && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-outline" size={48} color="#CCC" />
+            <Text style={styles.emptyText}>No users found</Text>
+          </View>
+        )}
+
+        {/* Default view (no search active, restaurants mode only) */}
+        {!isSearchActive && searchMode === "restaurants" && (
           <>
             {/* Recent Searches */}
             {recentSearches.length > 0 && (
@@ -404,6 +503,11 @@ export default function SearchTab() {
           </>
         )}
       </ScrollView>
+
+      <UserProfileModal
+        userId={selectedUserId}
+        onClose={() => setSelectedUserId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -740,5 +844,59 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#999",
     marginTop: 10,
+  },
+
+  /* ---- Mode Toggle ---- */
+  modeToggle: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginBottom: 4,
+    backgroundColor: "#EDE8E3",
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: 9,
+    gap: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: "#FF6B35",
+  },
+  modeButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+  },
+  modeButtonTextActive: {
+    color: "#FFF",
+  },
+
+  /* ---- User Result ---- */
+  userAvatarSmall: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FFF5F0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E8E0D8",
+  },
+  userAvatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  userBioPreview: {
+    fontSize: 12,
+    color: "#AAA",
+    marginTop: 2,
   },
 });

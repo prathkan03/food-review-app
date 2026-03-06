@@ -19,7 +19,7 @@ public class SecurityConfig {
         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
         // public endpoints
-        .requestMatchers("/health", "/debug/**", "/restaurants/**", "/ingredients/**", "/users/search").permitAll()
+        .requestMatchers("/health", "/debug/**", "/restaurants/**", "/ingredients/**", "/users/**", "/reviewfeed/user/**").permitAll()
 
         // everything else requires a valid Bearer token
         .anyRequest().authenticated()
